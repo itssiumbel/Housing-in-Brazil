@@ -1,0 +1,91 @@
+# Import Matplotlib, pandas, and plotly
+import matplotlib.pyplot as plt
+import pandas as pd
+import plotly.express as px
+
+# Import csv file
+df1 = pd.read_csv("data/brasil-real-estate-1.csv")
+
+# Clean data
+df1.dropna(inplace=True)
+df1[["lat", "lon"]] = df1["lat-lon"].str.split(",", expand=True)
+df1["lat"] = df1.lat.astype(float)
+df1["lon"] = df1.lon.astype(float)
+df1["state"] = df1["place_with_parent_names"].str.split("|", expand=True)[2]
+df1["price_usd"]=(
+    df1["price_usd"].str.replace("$", "", regex=False)
+    .str.replace(",", "")
+    .astype(float))
+df1.drop(columns=["place_with_parent_names", "lat-lon"], inplace=True)
+
+# Import 2 csv file and clean it 
+df2 = pd.read_csv("data/brasil-real-estate-2.csv")
+df2["price_usd"]=(df2["price_brl"]/3.19).round(2)
+df2.dropna(inplace=True)
+df2.drop(columns=["price_brl"], inplace=True)
+
+# Concatenate df1 and df2 to create a new DataFrame
+df = pd.concat([df1, df2])
+print("df shape:", df.shape)
+
+# Exploration
+fig = px.scatter_mapbox(
+    df,
+    lat="lat",
+    lon="lon",
+    center={"lat": -14.2, "lon": -51.9},  # Map will be centered on Brazil
+    width=600,
+    height=600,
+    hover_data=["price_usd"],  # Display price when hovering mouse over house
+)
+
+fig.update_layout(mapbox_style="open-street-map")
+fig.show()
+summary_stats =df[["area_m2","price_usd"]].describe()
+
+# Build histogram
+plt.hist(df["price_usd"], color="b")
+plt.xlabel("Price [USD]")
+plt.title("Distribution of Home Prices")
+plt.savefig("images/1-5-12.png", dpi=150)
+
+# Build box plot
+plt.boxplot(df["area_m2"], vert=False)
+plt.xlabel("Area [sq meters]")
+plt.title("Distribution of Home Sizes")
+plt.savefig("images/1-5-13.png", dpi=150)
+
+# Create series that shows the mean home price in each region in Brazil, sorted from smallest to largest
+mean_price_by_region = df.groupby("region")["price_usd"].mean().sort_values(ascending=True)
+
+# Build bar chart, label axes, add title
+mean_price_by_region.plot(
+    kind="bar",
+    xlabel="Region",
+    ylabel="Mean Price [USD]",
+    title="Mean Home Price by Region"
+)
+plt.savefig("images/1-5-15.png", dpi=150)
+
+# Create a dataframe that contains all the homes from df that are in the "South" region
+df_south =  df[df["region"] =="South"]
+
+# Create series that contains the number of properties in each state in df_south
+homes_by_state = df_south["state"].value_counts()
+
+# Create a scatter plot with  price vs. area for the state that has the largest number of properties
+df_south_rgs = df_south[df_south["state"] == "Rio Grande do Sul"]
+plt.scatter(df_south_rgs["area_m2"], df_south_rgs["price_usd"])
+plt.xlabel("Area [sq meters]")
+plt.ylabel("Price [USD]")
+plt.title("Rio Grande do Sul: Price vs. Area")
+plt.savefig("images/1-5-18.png", dpi=150)
+
+#Create a dictionary south_states_corr, where the keys are the names of the three states in the "South" region of Brazil, 
+#and their associated values are the correlation coefficient between "area_m2" and "price_usd" in that state.
+south_states_corr = {}
+for i in homes_by_state.index:
+    df_t=df_south[df_south["state"]==i]
+    t_correlation = df_t["area_m2"].corr(df_t["price_usd"])
+    south_states_corr[i]=t_correlation
+south_states_corr
